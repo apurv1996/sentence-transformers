@@ -27,6 +27,7 @@ from .util import import_from_string, batch_to_device, fullname, snapshot_downlo
 from .models import Transformer, Pooling, Dense
 from .model_card_templates import ModelCardTemplate
 from . import __version__
+from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ class SentenceTransformer(nn.Sequential):
                     model_name_or_path = __MODEL_HUB_ORGANIZATION__ + "/" + model_name_or_path
 
                 model_path = os.path.join(cache_folder, model_name_or_path.replace("/", "_"))
-                
+
                 if not os.path.exists(os.path.join(model_path, 'modules.json')):
                     # Download from hub with caching
                     snapshot_download(model_name_or_path,
@@ -585,6 +586,8 @@ class SentenceTransformer(nn.Sequential):
             save_best_model: bool = True,
             max_grad_norm: float = 1,
             use_amp: bool = False,
+            log_steps: int = 0,
+            log_callback: Callable[[int, int, float, float], None] = None,
             callback: Callable[[float, int, int], None] = None,
             show_progress_bar: bool = True,
             checkpoint_path: str = None,
@@ -611,6 +614,10 @@ class SentenceTransformer(nn.Sequential):
         :param save_best_model: If true, the best model (according to evaluator) is stored at output_path
         :param max_grad_norm: Used for gradient normalization.
         :param use_amp: Use Automatic Mixed Precision (AMP). Only for Pytorch >= 1.6.0
+        :param log_steps: Log every `log_steps` steps. Should be greater than 0 for logging to kick in.
+        :param log_callback: Callback function that is invoked to log during training:
+                It must accept the following parameters in this order:
+                `training idx`, `training_steps`, `current lr`, `loss value` (Sends loss value and current lr during `training_steps` for loss objective #`training_idx`)
         :param callback: Callback function that is invoked after each evaluation.
                 It must accept the following three parameters in this order:
                 `score`, `epoch`, `steps`
@@ -728,11 +735,20 @@ class SentenceTransformer(nn.Sequential):
                     if not skip_scheduler:
                         scheduler.step()
 
+                    if log_steps > 0 and global_step % log_steps == 0 and log_callback is not None:
+                        try:
+                            logger.info(20 * '-')
+                            logger.info(global_step)
+                            log_callback(train_idx, global_step, scheduler.get_last_lr(), loss_value.item())
+                        except Exception as e:
+                            logger.warning(e)
+                            logger.warning("Logging error encountered. Ignoring..")
+
                 training_steps += 1
                 global_step += 1
 
-                if evaluation_steps > 0 and training_steps % evaluation_steps == 0:
-                    self._eval_during_training(evaluator, output_path, save_best_model, epoch, training_steps, callback)
+                if evaluation_steps > 0 and global_step % evaluation_steps == 0:
+                    self._eval_during_training(evaluator, output_path, save_best_model, epoch, global_step, callback)
 
                     for loss_model in loss_models:
                         loss_model.zero_grad()
@@ -742,7 +758,7 @@ class SentenceTransformer(nn.Sequential):
                     self._save_checkpoint(checkpoint_path, checkpoint_save_total_limit, global_step)
 
 
-            self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, callback)
+            self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1)
 
         if evaluator is None and output_path is not None:   #No evaluator, but output path: save final model version
             self.save(output_path)
