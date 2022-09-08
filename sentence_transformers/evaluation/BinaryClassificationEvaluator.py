@@ -84,7 +84,8 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
 
 
         #Main score is the max of Average Precision (AP)
-        main_score = max(scores[short_name]['ap'] for short_name in scores)
+        # main_score = max(scores[short_name]['ap'] for short_name in scores)
+        main_score = scores['cossim']
 
         file_output_data = [epoch, steps]
 

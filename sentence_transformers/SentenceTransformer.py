@@ -27,7 +27,7 @@ from .util import import_from_string, batch_to_device, fullname, snapshot_downlo
 from .models import Transformer, Pooling, Dense
 from .model_card_templates import ModelCardTemplate
 from . import __version__
-from torch.utils.tensorboard import SummaryWriter
+
 
 logger = logging.getLogger(__name__)
 
@@ -758,7 +758,7 @@ class SentenceTransformer(nn.Sequential):
                     self._save_checkpoint(checkpoint_path, checkpoint_save_total_limit, global_step)
 
 
-            self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1)
+            self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, None)
 
         if evaluator is None and output_path is not None:   #No evaluator, but output path: save final model version
             self.save(output_path)
@@ -793,6 +793,8 @@ class SentenceTransformer(nn.Sequential):
             score = evaluator(self, output_path=eval_path, epoch=epoch, steps=steps)
             if callback is not None:
                 callback(score, epoch, steps)
+            if isinstance(score,dict):
+                score = score['ap']
             if score > self.best_score:
                 self.best_score = score
                 if save_best_model:
