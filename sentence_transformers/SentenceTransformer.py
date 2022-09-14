@@ -748,7 +748,11 @@ class SentenceTransformer(nn.Sequential):
                 global_step += 1
 
                 if evaluation_steps > 0 and global_step % evaluation_steps == 0:
-                    self._eval_during_training(evaluator, output_path, save_best_model, epoch, global_step, callback)
+                    if isinstance(evaluator,dict):
+                        for key in evaluator:
+                            self._eval_during_training(evaluator[key], output_path, save_best_model, epoch, global_step, callback, sifter_key=key)
+                    else:
+                        self._eval_during_training(evaluator, output_path, save_best_model, epoch, global_step, callback)
 
                     for loss_model in loss_models:
                         loss_model.zero_grad()
@@ -757,8 +761,11 @@ class SentenceTransformer(nn.Sequential):
                 if checkpoint_path is not None and checkpoint_save_steps is not None and checkpoint_save_steps > 0 and global_step % checkpoint_save_steps == 0:
                     self._save_checkpoint(checkpoint_path, checkpoint_save_total_limit, global_step)
 
-
-            self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, None)
+            if isinstance(evaluator, dict):
+                for key in evaluator:
+                    self._eval_during_training(evaluator[key], output_path, save_best_model, epoch, -1,None)
+            else:
+                self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, None)
 
         if evaluator is None and output_path is not None:   #No evaluator, but output path: save final model version
             self.save(output_path)
@@ -781,7 +788,7 @@ class SentenceTransformer(nn.Sequential):
             os.makedirs(output_path, exist_ok=True)
         return evaluator(self, output_path)
 
-    def _eval_during_training(self, evaluator, output_path, save_best_model, epoch, steps, callback):
+    def _eval_during_training(self, evaluator, output_path, save_best_model, epoch, steps, callback, **kwargs):
         """Runs evaluation during the training"""
         eval_path = output_path
         if output_path is not None:
@@ -792,7 +799,7 @@ class SentenceTransformer(nn.Sequential):
         if evaluator is not None:
             score = evaluator(self, output_path=eval_path, epoch=epoch, steps=steps)
             if callback is not None:
-                callback(score, epoch, steps)
+                callback(score, epoch, steps,sifter_key=kwargs['sifter_key'])
             if isinstance(score,dict):
                 score = score['ap']
             if score > self.best_score:
