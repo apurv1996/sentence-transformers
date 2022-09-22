@@ -16,3 +16,4 @@ from .BatchHardTripletLoss import *
 from .BatchHardSoftMarginTripletLoss import *
 from .BatchSemiHardTripletLoss import *
 from .BatchAllTripletLoss import *
+from .BatchPosTripletLoss import *
